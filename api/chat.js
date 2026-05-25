@@ -1,20 +1,19 @@
 export default async function handler(req, res) {
-  // only allow POST requests
+  // allow only POST
   if (req.method !== "POST") {
-    res.status(405).send("method not allowed");
-    return;
+    return res.status(405).send("method not allowed");
   }
 
   try {
-    const { message } = req.body;
+    // debug incoming body
+    console.log("BODY:", req.body);
 
-    // make sure message exists
+    const message = req.body?.message;
+
     if (!message) {
-      res.status(400).send("missing message");
-      return;
+      return res.status(400).send("missing message");
     }
 
-    // send request to gemini
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
@@ -38,24 +37,18 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
-    // extract ALL text parts
-    let output = "";
+    console.log("GEMINI RESPONSE:", JSON.stringify(data));
 
-    if (
-      data.candidates &&
-      data.candidates[0] &&
-      data.candidates[0].content &&
-      data.candidates[0].content.parts
-    ) {
-      output = data.candidates[0].content.parts
-        .map(part => part.text || "")
-        .join("");
-    }
+    const output =
+      data?.candidates?.[0]?.content?.parts
+        ?.map(part => part.text || "")
+        .join("") || "";
 
-    // return ONLY plain text
     res.setHeader("Content-Type", "text/plain");
-    res.status(200).send(output || "no response");
+    return res.status(200).send(output || "empty ai response");
+
   } catch (error) {
-    res.status(500).send("server error");
+    console.error(error);
+    return res.status(500).send("server error");
   }
 }
