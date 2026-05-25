@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-  // allow CORS (this is required for penguinmod/browser tools)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -9,39 +8,44 @@ export default async function handler(req, res) {
   }
 
   if (req.method !== "POST") {
-    return res.status(405).send("method not allowed (use POST)");
+    return res.status(405).send("method not allowed");
   }
 
   try {
-    const body =
-      typeof req.body === "string"
-        ? JSON.parse(req.body)
-        : req.body;
+    let body = req.body;
 
-    const message = body?.message;
-
-    if (!message) {
-      return res.status(400).send("missing message");
+    // handle broken penguinmod payloads
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = { message: body }; // raw text fallback
+      }
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    // support multiple possible formats
+    const message =
+      body?.message ||
+      body?.text ||
+      body?.input ||
+      body;
 
-    if (!apiKey) {
-      return res.status(500).send("missing GEMINI_API_KEY on vercel");
+    if (!message) {
+      return res.status(400).send(
+        "missing message (debug: " + JSON.stringify(req.body) + ")"
+      );
     }
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [
             {
               role: "user",
-              parts: [{ text: message }]
+              parts: [{ text: String(message) }]
             }
           ]
         })
@@ -57,7 +61,7 @@ export default async function handler(req, res) {
 
     if (!text) {
       return res.status(500).send(
-        "empty gemini response (check api key or request format)"
+        "empty gemini response (debug: " + JSON.stringify(data) + ")"
       );
     }
 
