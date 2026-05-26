@@ -23,7 +23,7 @@ export default async function handler(req, res) {
       return res.status(500).send("missing GROQ_API_KEY");
     }
 
-    // FORCE model injection (this fixes your error)
+    // inject model automatically
     const groqBody = {
       model: "llama-3.3-70b-versatile",
       ...body
@@ -43,10 +43,30 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
+    // groq error handling
     if (data.error) {
       return res
         .status(500)
         .send("groq error: " + data.error.message);
     }
 
-   
+    // extract AI response
+    const text =
+      data?.choices?.[0]?.message?.content || "";
+
+    if (!text) {
+      return res
+        .status(500)
+        .send("empty response: " + JSON.stringify(data));
+    }
+
+    // return plain text ONLY (penguinmod-friendly)
+    res.setHeader("Content-Type", "text/plain");
+    return res.status(200).send(text);
+
+  } catch (err) {
+    return res
+      .status(500)
+      .send("server error: " + err.message);
+  }
+}
