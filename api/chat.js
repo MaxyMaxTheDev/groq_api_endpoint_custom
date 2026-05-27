@@ -1,4 +1,5 @@
 export default async function handler(req, res) {
+  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -18,13 +19,11 @@ export default async function handler(req, res) {
       return res.status(500).send("missing GROQ_API_KEY");
     }
 
-    // 🔥 THIS is the fix: treat EVERYTHING as raw input first
+    // -----------------------------
+    // extract message safely
+    // -----------------------------
     let userMessage = "";
 
-    // Vercel sometimes gives:
-    // - string
-    // - object
-    // - undefined
     const body = req.body;
 
     if (typeof body === "string") {
@@ -34,24 +33,33 @@ export default async function handler(req, res) {
         body.message ||
         body.text ||
         body.input ||
-        JSON.stringify(body);
+        "";
     }
 
     userMessage = String(userMessage).trim();
 
-    if (!userMessage) {
-      return res
-        .status(400)
-        .send("no message received from penguinmod/turbowarp");
+    // remove accidental wrapping quotes
+    if (
+      userMessage.startsWith('"') &&
+      userMessage.endsWith('"')
+    ) {
+      userMessage = userMessage.slice(1, -1);
     }
 
+    if (!userMessage) {
+      return res.status(400).send("no message received from penguinmod");
+    }
+
+    // -----------------------------
+    // call groq
+    // -----------------------------
     const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
+          Authorization: `Bearer ${apiKey}`
         },
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
@@ -59,7 +67,7 @@ export default async function handler(req, res) {
             {
               role: "system",
               content:
-                "you are a chaotic gen z ai. use short, funny, and unhelpful responses like when the user asks for a equation answer say good question and be 50% dumb and 50% smart."
+                "you are a chaotic gen z ai. use short, funny, and unhelpful responses. when the user asks for a math equation, respond with 'good question'. be 50% dumb and 50% smart."
             },
             {
               role: "user",
@@ -73,19 +81,17 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (data.error) {
-      return res
-        .status(500)
-        .send("groq error: " + data.error.message);
+      return res.status(500).send("groq error: " + data.error.message);
     }
 
-    const text = data?.choices?.[0]?.message?.content;
+    const aiText = data?.choices?.[0]?.message?.content;
 
-    if (!text) {
-      return res.status(500).send("empty response from groq");
+    if (!aiText) {
+      return res.status(500).send("empty ai response");
     }
 
     res.setHeader("Content-Type", "text/plain");
-    return res.status(200).send(text);
+    return res.status(200).send(aiText);
 
   } catch (err) {
     return res.status(500).send("server error: " + err.message);
