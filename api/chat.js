@@ -69,7 +69,7 @@ export default async function handler(req, res) {
         },
         {
           role: "user",
-          content: userMessage
+          content: String(req.body).trim()
         }
       ]
     };
